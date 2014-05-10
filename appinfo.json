@@ -1,0 +1,37 @@
+{
+  "uuid": "f0d3403d-9cec-4101-8502-2a801fe24761",
+  "shortName": "Notifications",
+  "longName": "Notifications",
+  "companyName": "Connor Dunn",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": false
+  },
+  "appKeys": {},
+  "resources": {
+    "media": [
+      {
+        "menuIcon": true,
+        "type": "png",
+        "name": "IMAGE_ICON",
+        "file": "images/icon.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_CROSS",
+        "file": "images/cross.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_DOWN",
+        "file": "images/down.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_UP",
+        "file": "images/up.png"
+      }
+    ]
+  }
+}

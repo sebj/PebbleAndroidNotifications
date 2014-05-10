@@ -1,0 +1,9 @@
+._*
+.DS_Store
+_
+build
+.lock-waf*
+.waf*
+waf
+pebble-screenshot*
+.*.swp
