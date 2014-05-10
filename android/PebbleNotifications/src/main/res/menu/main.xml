@@ -1,0 +1,11 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="uk.co.connorhd.android.pebblenotifications.MainActivity" >
+
+    <item android:id="@+id/settings"
+        android:title="@string/settings"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+
+</menu>
