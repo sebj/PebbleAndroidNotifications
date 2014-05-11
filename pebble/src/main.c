@@ -17,8 +17,7 @@
 #define MSG_NOTIFICATION_TITLE 200
 #define MSG_NOTIFICATION_DETAILS 100
 
-// TODO: Use update_layer_callback to draw icon, notification title/app name straight onto
-// background; and use a TextLayer and ScrollLayer to display detail text
+// TODO: Use ScrollLayer
 Window *window;
 Layer *layer;
 ActionBarLayer *action_bar;

@@ -1,18 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">PebbleNotifications</string>
+    <string name="app_name">Pebble Notifications</string>
 
-    <string name="welcome">Welcome! Once this app has been setup, it will push all notifications to your Pebble. To setup, follow the following steps:</string>
+    <string name="welcome">To setup, follow these steps:</string>
     <string name="step1">First, install the associated Pebble app:</string>
     <string name="install_app">Install Pebble app…</string>
     <string name="step2">Next, make sure this app has permission to access your notifications:</string>
     <string name="add_permission">Add security permission…</string>
     <string name="step3">Finally, send a test notification:</string>
     <string name="create_notif">Send test notification</string>
-    <string name="step4">If you see it on your Pebble, you\'re done! All notifications from now on will be pushed.</string>
+    <string name="step4">If it\'s on your Pebble, you\'re done! All notifications from now on will be pushed.</string>
+    <string name="finish">Done</string>
 
-    <string name="settings">Settings…</string>
+    <string name="setup">Setup…</string>
+    <string name="test_notification_menu">Send test notification</string>
     <string name="about">About</string>
 
 </resources>

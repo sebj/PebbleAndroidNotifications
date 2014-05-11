@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <SwitchPreference
+        android:key="pref_master_switch"
+        android:title="Notifications"
+        android:summaryOff="No notifications will be sent to your Pebble"
+        android:summaryOn="Send notifications to your Pebble"
+        android:defaultValue="true"/>
+
+    <SwitchPreference
+        android:key="pref_always_send_notifications"
+        android:dependency="pref_master_switch"
+        android:title="Always send notifications"
+        android:summary="Send notifications when screen is on"
+        android:defaultValue="true" />
+
+</PreferenceScreen>

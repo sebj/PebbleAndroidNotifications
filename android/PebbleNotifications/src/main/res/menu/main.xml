@@ -3,8 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="uk.co.connorhd.android.pebblenotifications.MainActivity" >
 
-    <item android:id="@+id/settings"
-        android:title="@string/settings"
+    <item android:id="@+id/setup"
+        android:title="@string/setup"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+
+    <item android:id="@+id/sendTestNotification"
+        android:title="@string/test_notification_menu"
         android:orderInCategory="100"
         app:showAsAction="never" />
 
