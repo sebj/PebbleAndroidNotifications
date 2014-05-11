@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.app.Fragment;
@@ -57,6 +58,7 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View mView = inflater.inflate(R.layout.fragment_setup, container, false);
+        mView.setBackgroundColor(Color.WHITE);
 
         permissionButton = (Button)mView.findViewById(R.id.btnAddPermission);
         permissionButton.setEnabled(!notificationAccess());

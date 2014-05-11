@@ -23,8 +23,6 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Log.i("uk.co.connorhd.android.pebblenotifications", "HEYOLO MAIN STARTED");
-
         sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
 
         if (savedInstanceState == null) {
@@ -50,7 +48,12 @@ public class MainActivity extends Activity {
     }
 
     public void finishedSetup() {
-        getFragmentManager().beginTransaction().replace(R.id.container, new PrefsFragment()).commit();
+        final FragmentTransaction ft = getFragmentManager().beginTransaction();
+        ft.setCustomAnimations(0, R.animator.slide_down);
+        ft.remove(getFragmentManager().findFragmentByTag("setup"));
+        ft.addToBackStack(null);
+        ft.commit();
+
         showingSetup = false;
     }
 
@@ -66,9 +69,12 @@ public class MainActivity extends Activity {
             case R.id.setup:
                 if (!showingSetup) {
                     final FragmentTransaction ft = getFragmentManager().beginTransaction();
-                    ft.replace(R.id.container, new SetupFragment());
+                    ft.setCustomAnimations(R.animator.slide_up, 0);
+                    ft.add(R.id.container, new SetupFragment(), "setup");
                     ft.addToBackStack(null);
                     ft.commit();
+
+                    showingSetup = true;
                 }
 
                 break;
