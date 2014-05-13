@@ -1,6 +1,7 @@
 package uk.co.connorhd.android.pebblenotifications;
 
 import android.app.Activity;
+import android.app.Fragment;
 import android.app.FragmentTransaction;
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -50,8 +51,18 @@ public class MainActivity extends Activity {
     public void finishedSetup() {
         final FragmentTransaction ft = getFragmentManager().beginTransaction();
         ft.setCustomAnimations(0, R.animator.slide_down);
-        ft.remove(getFragmentManager().findFragmentByTag("setup"));
-        ft.addToBackStack(null);
+
+        Fragment setupFragment = getFragmentManager().findFragmentByTag("setup");
+
+        if (setupFragment != null) {
+            // If setup added via menu button, remove it
+            ft.remove(setupFragment);
+            ft.addToBackStack(null);
+        } else {
+            // If added normally at start, just replace it with a new preference fragment
+            ft.replace(R.id.container, new PrefsFragment());
+        }
+
         ft.commit();
 
         showingSetup = false;

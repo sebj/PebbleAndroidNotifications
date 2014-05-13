@@ -96,13 +96,14 @@ public class PNListenerService extends NotificationListenerService {
                     int notifId = 0;
                     List<StatusBarNotification> sbns = Arrays.asList(getActiveNotifications());
                     Collections.reverse(sbns);
+
                     for (StatusBarNotification sbn : sbns) {
                         if (notifId == 25) {
                             // Can't send that many notifications
                             return;
                         }
-                        if (sbn.isOngoing() || sbn.getNotification().priority < Notification.PRIORITY_DEFAULT || sbn.getNotification().icon == 0) {
-                            // Ignore some notification types
+                        if (!shouldSendNotification(sbn)) {
+                            // Skip notification, move to next
                             continue;
                         }
 
@@ -131,7 +132,7 @@ public class PNListenerService extends NotificationListenerService {
 
                                     if (field.getName().equals("mActions")) {
                                         ArrayList<Object> things = (ArrayList<Object>) field.get(rv);
-                                        Log.w("ABC", things.toString());
+                                        //Log.w("ABC", things.toString());
                                         for (Object object : things) {
                                             for (Field innerField : object.getClass().getDeclaredFields()) {
                                                 innerField.setAccessible(true);
@@ -233,8 +234,12 @@ public class PNListenerService extends NotificationListenerService {
                     }
 
                     if (notifId == 0) {
-                        // No notifications - Close application on watch
-                        PebbleKit.closeAppOnPebble(getApplicationContext(), appUUID);
+                        // No notifications
+                        PebbleDictionary dict = new PebbleDictionary();
+                        dict.addInt8(700, (byte)1);
+                        outgoing.add(dict);
+
+                        //PebbleKit.closeAppOnPebble(getApplicationContext(), appUUID);
                     }
                     flushOutgoing();
                 } else if (data.contains(1)) {
@@ -263,25 +268,16 @@ public class PNListenerService extends NotificationListenerService {
 
 	@Override
 	public void onNotificationPosted(StatusBarNotification sbn) {
-        SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
-
-        boolean alwaysNotify = sharedPrefs.getBoolean("pref_always_send_notifications", true);
-
-        PowerManager powerManager = (PowerManager)getSystemService(POWER_SERVICE);
-
-        // Only send to Pebble if notification is not ongoing, priority is default or higher, has icon
-        // notifications enabled AND [always send notifications is on, OR it's off but the screen is off]
-        if (!sbn.isOngoing() && sbn.getNotification().priority >= Notification.PRIORITY_DEFAULT && sbn.getNotification().icon != 0
-                && sharedPrefs.getBoolean("pref_master_switch", true) && (alwaysNotify || (!alwaysNotify && !powerManager.isScreenOn()))) {
+        if (shouldSendNotification(sbn)) {
             // Start if not running
-			PebbleKit.startAppOnPebble(getApplicationContext(), appUUID);
+            PebbleKit.startAppOnPebble(getApplicationContext(), appUUID);
 
-			// If running notify that new notifications exist
-			PebbleDictionary dict = new PebbleDictionary();
-			dict.addInt8(500, (byte) 0);
-			outgoing.add(dict);
-			flushOutgoing();
-		}
+            // If running notify that new notifications exist
+            PebbleDictionary dict = new PebbleDictionary();
+            dict.addInt8(500, (byte) 0);
+            outgoing.add(dict);
+            flushOutgoing();
+        }
 	}
 
 	@Override
@@ -292,4 +288,17 @@ public class PNListenerService extends NotificationListenerService {
 		outgoing.add(dict);
 		flushOutgoing();
 	}
+
+    public boolean shouldSendNotification(StatusBarNotification sbn) {
+        SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+
+        boolean alwaysNotify = sharedPrefs.getBoolean("pref_always_send_notifications", true);
+
+        PowerManager powerManager = (PowerManager)getSystemService(POWER_SERVICE);
+
+        // Only send to Pebble if notification is not ongoing, priority is default or higher, has icon
+        // notifications enabled AND [always send notifications is on, OR it's off but the screen is off]
+        return !sbn.isOngoing() && sbn.getNotification().priority >= Notification.PRIORITY_DEFAULT && sbn.getNotification().icon != 0
+                && sharedPrefs.getBoolean("pref_master_switch", true) && (alwaysNotify || (!alwaysNotify && !powerManager.isScreenOn()));
+    }
 }

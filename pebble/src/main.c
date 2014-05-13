@@ -4,10 +4,12 @@
 #define LOADING_NOTIFICATIONS -1
 #define NO_NOTIFICATIONS -2
 #define COMM_ERROR -3
-	
+
+// Sent
 #define MSG_ASK_FOR_DATA 0
 #define MSG_DISMISS_NOTIFICATION 1
-	
+
+// Received
 #define MSG_NOTIFICATIONS_CHANGED 500
 #define MSG_NO_NOTIFICATIONS 700
 #define MSG_LOAD_NOTIFICATION_ID 300
@@ -84,14 +86,14 @@ void update_layer_callback(Layer *me, GContext *ctx) {
 						   fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
 						   GRect(5, 52, 144 - ACTION_BAR_WIDTH - 8, 24),
 						   GTextOverflowModeTrailingEllipsis,
-						   GTextAlignmentLeft,
+						   GTextAlignmentCenter,
 						   NULL);
 		graphics_draw_text(ctx,
 						   notifications[atNotification].details,
 						   fonts_get_system_font(FONT_KEY_GOTHIC_18),
 						   GRect(5, 81, 144 - ACTION_BAR_WIDTH - 8, 82),
 						   GTextOverflowModeWordWrap,
-						   GTextAlignmentLeft,
+						   GTextAlignmentCenter,
 						   NULL);
 		
 		if (atNotification == 0) {
@@ -116,6 +118,7 @@ void up_click_handler(ClickRecognizerRef recognizer, void *context) {
 		layer_mark_dirty((Layer*)layer);
 	}
 }
+
 void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 	if (atNotification > -1) {
 		DictionaryIterator *dict;
@@ -125,16 +128,18 @@ void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 		}
 	}
 }
+
 void down_click_handler(ClickRecognizerRef recognizer, void *context) {
 	if (atNotification > -1 && atNotification < loadingNotification) {
 		atNotification++;
 		layer_mark_dirty((Layer*)layer);
 	}
 }
+
 void click_config_provider(void *context) {
-	window_single_click_subscribe(BUTTON_ID_UP, (ClickHandler) up_click_handler);
-	window_single_click_subscribe(BUTTON_ID_SELECT, (ClickHandler) select_click_handler);
-	window_single_click_subscribe(BUTTON_ID_DOWN, (ClickHandler) down_click_handler);
+	window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
+	window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
+	window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
 }
 
 // Communication with phone
@@ -146,19 +151,18 @@ void ask_for_data() {
 		app_message_outbox_send();
 	}
 }
-void my_out_sent_handler(DictionaryIterator *sent, void *context) {
-	// All good, no need to do anything
-}
-void my_out_fail_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
+
+void out_fail_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
 	atNotification = COMM_ERROR;
 	layer_mark_dirty((Layer*)layer);
 }
-void my_in_rcv_handler(DictionaryIterator *received, void *context) {
+
+void in_rcv_handler(DictionaryIterator *received, void *context) {
 	Tuple* cmd_tuple = dict_find(received, MSG_NOTIFICATIONS_CHANGED);
 	if (cmd_tuple != NULL) {
 		ask_for_data();
 	}
-	
+
 	cmd_tuple = dict_find(received, MSG_NO_NOTIFICATIONS);
 	if (cmd_tuple != NULL) {
 		atNotification = NO_NOTIFICATIONS;
@@ -206,9 +210,6 @@ void my_in_rcv_handler(DictionaryIterator *received, void *context) {
 	
   	layer_mark_dirty((Layer*)layer);
 }
-void my_in_drp_handler(AppMessageResult reason, void *context) {
-	// Java will handle NACKs, not sure if anything useful can be done here
-}
 
 // App lifecycle
 
@@ -239,10 +240,8 @@ void handle_init(void) {
 	layer_mark_dirty(layer);
 
 	//Setup AppMessage
-	app_message_register_inbox_received(my_in_rcv_handler);
-	app_message_register_inbox_dropped(my_in_drp_handler);
-	app_message_register_outbox_failed(my_out_fail_handler);
-	app_message_register_outbox_sent(my_out_sent_handler);
+	app_message_register_inbox_received(in_rcv_handler);
+	app_message_register_outbox_failed(out_fail_handler);
 	app_message_open(128, 32);
 	
 	ask_for_data();
