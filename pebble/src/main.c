@@ -294,6 +294,8 @@ void handle_deinit(void) {
 
 	layer_destroy(layer);
 	menu_layer_destroy(options);
+	action_bar_layer_destroy(action_bar);
+	window_destroy(options_window);
 	window_destroy(window);
 }
 
