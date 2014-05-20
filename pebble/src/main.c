@@ -1,45 +1,7 @@
 #include <pebble.h>
+#include "elements.h"
 
-#define MAX_NOTIFICATIONS 25
-#define LOADING_NOTIFICATIONS -1
-#define NO_NOTIFICATIONS -2
-#define COMM_ERROR -3
-
-// Sent
-#define MSG_ASK_FOR_DATA 0
-#define MSG_DISMISS_NOTIFICATION 1
-
-// Received
-#define MSG_NOTIFICATIONS_CHANGED 500
-#define MSG_NO_NOTIFICATIONS 700
-#define MSG_LOAD_NOTIFICATION_ID 300
-#define MSG_NOTIFICATION_ICON_1 0
-#define MSG_NOTIFICATION_ICON_2 1
-#define MSG_NOTIFICATION_ICON_3 2
-#define MSG_NOTIFICATION_TITLE 200
-#define MSG_NOTIFICATION_DETAILS 100
-
-// TODO: Use ScrollLayer
-Window *window;
-Layer *layer;
-ActionBarLayer *action_bar;
-
-GBitmap *button_up;
-GBitmap *button_down;
-GBitmap *button_cross;
-
-typedef struct Notification {
-	uint8_t icon[384];
-	char title[20];
-	char details[60];
-} Notification;
-
-Notification notifications[MAX_NOTIFICATIONS];
-
-int8_t loadingNotification = 0;
-int8_t atNotification = LOADING_NOTIFICATIONS;
-
-// Drawing display
+// Drawing
 
 void update_layer_callback(Layer *me, GContext *ctx) {
 	graphics_context_set_text_color(ctx, GColorBlack);
@@ -61,12 +23,12 @@ void update_layer_callback(Layer *me, GContext *ctx) {
 				break;
 		}
 		graphics_draw_text(ctx,
-		     message,
-		     fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
-		     GRect(5, 53, 144 - ACTION_BAR_WIDTH - 10, 80),
-		     GTextOverflowModeWordWrap,
-		     GTextAlignmentCenter,
-		     NULL);
+			 message,
+			 fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
+			 GRect(5, 53, 144 - ACTION_BAR_WIDTH - 10, 80),
+			 GTextOverflowModeWordWrap,
+			 GTextAlignmentCenter,
+			 NULL);
 		
 		action_bar_layer_clear_icon(action_bar, BUTTON_ID_UP);
 		action_bar_layer_clear_icon(action_bar, BUTTON_ID_SELECT);
@@ -126,6 +88,20 @@ void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 			dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
 			app_message_outbox_send();
 		}
+	} else {
+		// Show options
+		window_stack_push(options_window, true);
+		options_visible = true;
+	}
+}
+
+void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+	if (atNotification > -1) {
+		DictionaryIterator *dict;
+		if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
+			dict_write_int8(dict, MSG_NOTIFICATION_ACTION, (int8_t)atNotification);
+			app_message_outbox_send();
+		}
 	}
 }
 
@@ -140,9 +116,12 @@ void click_config_provider(void *context) {
 	window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
 	window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
 	window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
+
+	// Specify up_handler but no down_handler, with the default delay (0 => 500ms)
+	window_long_click_subscribe(BUTTON_ID_SELECT, 0, NULL, select_long_click_handler);
 }
 
-// Communication with phone
+// Phone communication
 
 void ask_for_data() {
 	DictionaryIterator *dict;
@@ -173,7 +152,15 @@ void in_rcv_handler(DictionaryIterator *received, void *context) {
 		loadingNotification = cmd_tuple->value->int8;
 		if (loadingNotification == 0) {
 			atNotification = 0;
-			vibes_short_pulse();
+
+			if (options_visible) {
+				window_stack_pop(true);
+				options_visible = false;
+			}
+			
+			if (persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true) {
+				vibes_short_pulse();
+			}
 		}
 	}
 	
@@ -208,7 +195,36 @@ void in_rcv_handler(DictionaryIterator *received, void *context) {
 		strcpy(&notifications[loadingNotification].details[0], cmd_tuple->value->cstring);
 	}
 	
-  	layer_mark_dirty((Layer*)layer);
+	layer_mark_dirty((Layer*)layer);
+}
+
+// Options menu
+void draw_row_callback(GContext *ctx, Layer *cell_layer, MenuIndex *cell_index, void *callback_context) {
+  switch(cell_index->row) {
+	case 0:
+		menu_cell_basic_draw(ctx, cell_layer, "Vibration", (persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true)? "Enabled":"Disabled", NULL);
+		
+		break;
+  }
+}
+ 
+uint16_t num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *callback_context) {
+  return 1;
+}
+
+void select_click_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *callback_context) {
+  switch (cell_index->row) {
+	case 0:
+		persist_write_bool(PERSIST_VIBRATION, !(persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true));
+
+		layer_mark_dirty(menu_layer_get_layer(options));
+
+		break;
+  }
+}
+
+void options_disappeared(Window *window) {
+	options_visible = false;
 }
 
 // App lifecycle
@@ -218,6 +234,10 @@ void handle_init(void) {
 	button_up = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_UP);
 	button_down = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_DOWN);
 	button_cross = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_CROSS);
+
+	// Variables
+	loadingNotification = 0;
+	options_visible = false;
 	
 	// Setup the window
 	window = window_create();
@@ -236,22 +256,44 @@ void handle_init(void) {
 	action_bar_layer_add_to_window(action_bar, window);
 	action_bar_layer_set_click_config_provider(action_bar, click_config_provider);
 
+
+	// Setup options window
+	options_window = window_create();
+	window_set_fullscreen(options_window, true);
+	window_set_window_handlers(options_window, (WindowHandlers){
+		.disappear = options_disappeared
+	});
+
+	// Setup options menu
+	options = menu_layer_create(GRect(0, 0, 144, 168));
+	menu_layer_set_callbacks(options, NULL, (MenuLayerCallbacks){
+		.draw_row = (MenuLayerDrawRowCallback) draw_row_callback,
+		.get_num_rows = (MenuLayerGetNumberOfRowsInSectionsCallback) num_rows_callback,
+		.select_click = (MenuLayerSelectCallback) select_click_callback
+	});
+	menu_layer_set_click_config_onto_window(options, options_window);
+
+	layer_add_child(window_get_root_layer(options_window), menu_layer_get_layer(options));
+
+
 	// Trigger a layer update
 	layer_mark_dirty(layer);
 
-	//Setup AppMessage
+	// Setup AppMessage
 	app_message_register_inbox_received(in_rcv_handler);
 	app_message_register_outbox_failed(out_fail_handler);
 	app_message_open(128, 32);
 	
 	ask_for_data();
 }
+
 void handle_deinit(void) {
-  	gbitmap_destroy(button_up);
+	gbitmap_destroy(button_up);
 	gbitmap_destroy(button_down);
 	gbitmap_destroy(button_cross);
 
 	layer_destroy(layer);
+	menu_layer_destroy(options);
 	window_destroy(window);
 }
 

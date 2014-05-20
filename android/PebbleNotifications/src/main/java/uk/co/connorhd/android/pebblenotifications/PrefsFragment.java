@@ -1,9 +1,7 @@
 package uk.co.connorhd.android.pebblenotifications;
 
-
 import android.os.Bundle;
 import android.preference.PreferenceFragment;
-
 
 public class PrefsFragment extends PreferenceFragment {
 

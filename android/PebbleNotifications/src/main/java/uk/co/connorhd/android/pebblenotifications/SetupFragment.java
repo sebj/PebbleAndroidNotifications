@@ -1,6 +1,5 @@
 package uk.co.connorhd.android.pebblenotifications;
 
-
 import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -22,13 +21,6 @@ import android.widget.Toast;
 
 import com.getpebble.android.kit.PebbleKit;
 
-
-/**
- * A simple {@link Fragment} subclass.
- * Use the {@link SetupFragment#newInstance} factory method to
- * create an instance of this fragment.
- *
- */
 public class SetupFragment extends Fragment implements View.OnClickListener {
 
     static final int INSTALL_PEBBLE_APP = 1;
@@ -115,7 +107,7 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
 
         } else if (v.getId() == R.id.btnCreateNotify) {
             // Send test notification
-            ((MainActivity) getActivity()).sendTestNotification();
+            ((MainActivity)getActivity()).sendTestNotification();
 
         } else if (v.getId() == R.id.btnFinish) {
             // Done!
@@ -132,7 +124,7 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
                                 editor.putBoolean("setup", true);
                                 editor.commit();
 
-                                ((MainActivity) getActivity()).finishedSetup();
+                                ((MainActivity)getActivity()).finishedSetup();
                             }
                         })
                         .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {

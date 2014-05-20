@@ -4,12 +4,12 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
 import android.app.Notification;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -25,6 +25,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.text.SpannableString;
 import android.util.Log;
+import android.util.SparseArray;
 import android.widget.RemoteViews;
 
 import com.getpebble.android.kit.Constants;
@@ -35,28 +36,34 @@ import com.getpebble.android.kit.PebbleKit.PebbleNackReceiver;
 import com.getpebble.android.kit.util.PebbleDictionary;
 
 public class PNListenerService extends NotificationListenerService {
-	private final UUID appUUID = UUID.fromString("f0d3403d-9cec-4101-8502-2a801fe24761");
+    private final UUID appUUID = UUID.fromString("f0d3403d-9cec-4101-8502-2a801fe24761");
 
-	private LinkedList<PebbleDictionary> outgoing = new LinkedList<PebbleDictionary>();
-	private boolean flushing = false;
-	private HashMap<Integer, StatusBarNotification> sentNotifications = new HashMap<Integer, StatusBarNotification>();
+    private final int MSG_NOTIFICATION_DETAILS = 100;
+    private final int MSG_NOTIFICATION_TITLE = 200;
+    private final int MSG_LOAD_NOTIFICATION_ID = 300;
+    private final int MSG_NOTIFICATIONS_CHANGED = 500;
+    private final int MSG_NO_NOTIFICATIONS = 700;
+
+    private LinkedList<PebbleDictionary> outgoing = new LinkedList<PebbleDictionary>();
+    private boolean flushing = false;
+    private SparseArray<StatusBarNotification> sentNotifications = new SparseArray<StatusBarNotification>();
 
     private PebbleAckReceiver pAck;
     private PebbleNackReceiver pNack;
     private PebbleDataReceiver pData;
 
-	private void flushOutgoing() {
-		if (!PebbleKit.isWatchConnected(getApplicationContext())) {
-			outgoing.remove();
-		}
-		if (outgoing.size() > 0 && !flushing) {
-			flushing = true;
-			PebbleKit.sendDataToPebbleWithTransactionId(getApplicationContext(), appUUID, outgoing.get(0), 174);
-		}
-	}
+    private void flushOutgoing() {
+        if (!PebbleKit.isWatchConnected(getApplicationContext())) {
+            outgoing.remove();
+        }
+        if (outgoing.size() > 0 && !flushing) {
+            flushing = true;
+            PebbleKit.sendDataToPebbleWithTransactionId(getApplicationContext(), appUUID, outgoing.get(0), 174);
+        }
+    }
 
-	@Override
-	public void onCreate() {
+    @Override
+    public void onCreate() {
         pAck = new PebbleAckReceiver(appUUID) {
             @Override
             public void receiveAck(Context context, int transactionId) {
@@ -160,10 +167,10 @@ public class PNListenerService extends NotificationListenerService {
                         }
 
                         PebbleDictionary dict = new PebbleDictionary();
-                        dict.addString(200, title.substring(0, Math.min(title.length(), 19)));
-                        dict.addString(100, details.substring(0, Math.min(details.length(), 59)));
+                        dict.addString(MSG_NOTIFICATION_TITLE, title.substring(0, Math.min(title.length(), 19)));
+                        dict.addString(MSG_NOTIFICATION_DETAILS, details.substring(0, Math.min(details.length(), 59)));
                         sentNotifications.put(notifId, sbn);
-                        dict.addInt8(300, (byte) notifId++);
+                        dict.addInt8(MSG_LOAD_NOTIFICATION_ID, (byte) notifId++);
                         outgoing.add(dict);
 
                         // Get icon
@@ -236,7 +243,7 @@ public class PNListenerService extends NotificationListenerService {
                     if (notifId == 0) {
                         // No notifications
                         PebbleDictionary dict = new PebbleDictionary();
-                        dict.addInt8(700, (byte)1);
+                        dict.addInt8(MSG_NO_NOTIFICATIONS, (byte)1);
                         outgoing.add(dict);
 
                         //PebbleKit.closeAppOnPebble(getApplicationContext(), appUUID);
@@ -249,6 +256,20 @@ public class PNListenerService extends NotificationListenerService {
                     if (notif != null) {
                         cancelNotification(notif.getPackageName(), notif.getTag(), notif.getId());
                     }
+                } else if (data.contains(2)) {
+                    // Try to open notification/perform notification action
+                    int notifId = data.getInteger(2).intValue();
+                    StatusBarNotification notif = sentNotifications.get(notifId);
+                    if (notif != null) {
+                        PendingIntent intent = notif.getNotification().contentIntent;
+                        if (intent != null) {
+                            try {
+                                notif.getNotification().contentIntent.send();
+                            } catch (PendingIntent.CanceledException e) {
+                                //
+                            }
+                        }
+                    }
                 }
             }
         };
@@ -256,49 +277,52 @@ public class PNListenerService extends NotificationListenerService {
         filter = new IntentFilter();
         filter.addAction(Constants.INTENT_APP_RECEIVE);
         registerReceiver(pData, filter);
-	}
+    }
 
-	@Override
-	public void onDestroy() {
-		super.onDestroy();
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
         unregisterReceiver(pAck);
         unregisterReceiver(pNack);
         unregisterReceiver(pData);
-	}
+    }
 
-	@Override
-	public void onNotificationPosted(StatusBarNotification sbn) {
+    @Override
+    public void onNotificationPosted(StatusBarNotification sbn) {
         if (shouldSendNotification(sbn)) {
             // Start if not running
             PebbleKit.startAppOnPebble(getApplicationContext(), appUUID);
 
             // If running notify that new notifications exist
             PebbleDictionary dict = new PebbleDictionary();
-            dict.addInt8(500, (byte) 0);
+            dict.addInt8(MSG_NOTIFICATIONS_CHANGED, (byte) 0);
             outgoing.add(dict);
             flushOutgoing();
         }
-	}
+    }
 
-	@Override
-	public void onNotificationRemoved(StatusBarNotification sbn) {
-		// If running notify that new notifications exist
-		PebbleDictionary dict = new PebbleDictionary();
-		dict.addInt8(500, (byte) 0);
-		outgoing.add(dict);
-		flushOutgoing();
-	}
+    @Override
+    public void onNotificationRemoved(StatusBarNotification sbn) {
+        // If running notify that new notifications exist
+        PebbleDictionary dict = new PebbleDictionary();
+        dict.addInt8(MSG_NOTIFICATIONS_CHANGED, (byte) 0);
+        outgoing.add(dict);
+        flushOutgoing();
+    }
 
     public boolean shouldSendNotification(StatusBarNotification sbn) {
         SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
 
         boolean alwaysNotify = sharedPrefs.getBoolean("pref_always_send_notifications", true);
+        boolean sendOngoing = sharedPrefs.getBoolean("pref_send_ongoing", false);
 
         PowerManager powerManager = (PowerManager)getSystemService(POWER_SERVICE);
 
-        // Only send to Pebble if notification is not ongoing, priority is default or higher, has icon
-        // notifications enabled AND [always send notifications is on, OR it's off but the screen is off]
-        return !sbn.isOngoing() && sbn.getNotification().priority >= Notification.PRIORITY_DEFAULT && sbn.getNotification().icon != 0
+        // Only send to Pebble if (send ongoing is true (ie. doesn't mattter if notification is or not)
+        // OR send ongoing is false but notification is not ongoing),
+        // priority is default or higher, has master notifications switch enabled
+        // AND [always send notifications is on, OR it's off but the screen is off]
+        return (sendOngoing || !sendOngoing && !sbn.isOngoing()) && sbn.getNotification().priority >= Notification.PRIORITY_DEFAULT && sbn.getNotification().icon != 0
                 && sharedPrefs.getBoolean("pref_master_switch", true) && (alwaysNotify || (!alwaysNotify && !powerManager.isScreenOn()));
     }
 }

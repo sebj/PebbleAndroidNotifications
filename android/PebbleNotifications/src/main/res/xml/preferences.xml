@@ -5,18 +5,25 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <SwitchPreference
+    <CheckBoxPreference
         android:key="pref_master_switch"
         android:title="Notifications"
         android:summaryOff="No notifications will be sent to your Pebble"
         android:summaryOn="Send notifications to your Pebble"
         android:defaultValue="true"/>
 
-    <SwitchPreference
+    <CheckBoxPreference
         android:key="pref_always_send_notifications"
         android:dependency="pref_master_switch"
         android:title="Always send notifications"
-        android:summary="Send notifications when screen is on"
+        android:summaryOn="Notifications will be sent regardless of screen state"
+        android:summaryOff="Notifications will only be sent when screen is off"
         android:defaultValue="true" />
+
+    <CheckBoxPreference
+        android:key="pref_send_ongoing"
+        android:dependency="pref_master_switch"
+        android:title="Send ongoing notifications"
+        android:defaultValue="false" />
 
 </PreferenceScreen>
