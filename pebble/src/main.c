@@ -1,6 +1,10 @@
 #include <pebble.h>
 #include "elements.h"
 
+//Animated action bar from https://github.com/gregoiresage/pebble_animated_actionbar
+//by Grégoire Sage
+#include "animated_ab.h"
+
 // Drawing
 
 void update_layer_callback(Layer *me, GContext *ctx) {
@@ -19,6 +23,10 @@ void update_layer_callback(Layer *me, GContext *ctx) {
                 message = "Error";
                 break;
         }
+
+        action_bar_layer_clear_icon(action_bar, BUTTON_ID_UP);
+        action_bar_layer_clear_icon(action_bar, BUTTON_ID_SELECT);
+        action_bar_layer_clear_icon(action_bar, BUTTON_ID_DOWN);
 
         if (atNotification == NO_NOTIFICATIONS) {
             BatteryChargeState state = battery_state_service_peek();
@@ -85,13 +93,42 @@ void update_layer_callback(Layer *me, GContext *ctx) {
                            GTextOverflowModeWordWrap,
                            GTextAlignmentLeft,
                            NULL);
+
         graphics_draw_text(ctx,
                            notifications[atNotification].details,
                            fonts_get_system_font(FONT_KEY_GOTHIC_24),
                            GRect(4, 50, 144-8, 90),
-                           GTextOverflowModeWordWrap,
+                           GTextOverflowModeFill,
                            GTextAlignmentLeft,
                            NULL);
+
+        // Update action bar
+        bool should_hide_action_bar = true;
+
+        if (atNotification == 0) {
+            action_bar_layer_clear_icon(action_bar, BUTTON_ID_UP);
+        } else {
+            should_hide_action_bar = false;
+            action_bar_layer_set_icon(action_bar, BUTTON_ID_UP, button_up);
+        }
+
+        action_bar_layer_set_icon(action_bar, BUTTON_ID_SELECT, button_cross);
+
+        if (atNotification == loadingNotification) {
+            action_bar_layer_clear_icon(action_bar, BUTTON_ID_DOWN);
+        } else {
+            should_hide_action_bar = false;
+            action_bar_layer_set_icon(action_bar, BUTTON_ID_DOWN, button_down);
+        }
+
+        if (should_hide_action_bar && action_bar_visible) {
+            hide_actionbar(action_bar);
+            action_bar_visible = false;
+
+        } else if (!should_hide_action_bar && !action_bar_visible) {
+            show_actionbar(action_bar);
+            action_bar_visible = true;
+        }
     }
 }
 
@@ -100,8 +137,8 @@ void update_layer_callback(Layer *me, GContext *ctx) {
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > 0) {
         atNotification--;
-        layer_mark_dirty((Layer*)layer);
     }
+    layer_mark_dirty((Layer*)layer);
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -120,10 +157,15 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > -1) {
-        DictionaryIterator *dict;
-        if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
-            dict_write_int8(dict, MSG_NOTIFICATION_ACTION, (int8_t)atNotification);
-            app_message_outbox_send();
+        if (action_bar_visible) {
+            DictionaryIterator *dict;
+            if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
+                dict_write_int8(dict, MSG_NOTIFICATION_ACTION, (int8_t)atNotification);
+                app_message_outbox_send();
+            }
+        } else {
+            show_actionbar(action_bar);
+            action_bar_visible = true;
         }
     }
 }
@@ -131,8 +173,8 @@ static void select_long_click_handler(ClickRecognizerRef recognizer, void *conte
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > -1 && atNotification < loadingNotification) {
         atNotification++;
-        layer_mark_dirty((Layer*)layer);
     }
+    layer_mark_dirty((Layer*)layer);
 }
 
 static void click_config_provider(void *context) {
@@ -175,8 +217,12 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
 
     cmd_tuple = dict_find(received, MSG_NO_NOTIFICATIONS);
     if (cmd_tuple != NULL) {
-        atNotification = NO_NOTIFICATIONS;
         ask_for_phone_battery();
+
+        hide_actionbar(action_bar);
+        action_bar_visible = false;
+
+        atNotification = NO_NOTIFICATIONS;
     }
 
     cmd_tuple = dict_find(received, MSG_PHONE_BATTERY);
@@ -199,6 +245,11 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
             if (persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true) {
                 vibes_short_pulse();
             }
+
+            // Only show action bar if multiple notifications
+            // if one, user can just press select button to dismiss/action
+            show_actionbar(action_bar);
+            action_bar_visible = true;
         }
     }
     
@@ -277,9 +328,9 @@ static void handle_battery(BatteryChargeState charge_state) {
 
 void handle_init(void) {
     // Load resources
-    /*button_up = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_UP);
+    button_up = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_UP);
     button_down = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_DOWN);
-    button_cross = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_CROSS);*/
+    button_cross = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_CROSS);
 
     // Variables
     loadingNotification = 0;
@@ -288,7 +339,7 @@ void handle_init(void) {
     // Setup the window
     window = window_create();
     window_set_fullscreen(window, false);
-    window_set_click_config_provider(window, click_config_provider);
+    //window_set_click_config_provider(window, click_config_provider);
 
     Layer *window_root_layer = window_get_root_layer(window);
     GRect frame = layer_get_bounds(window_root_layer);
@@ -297,6 +348,14 @@ void handle_init(void) {
     layer = layer_create((GRect){ .origin = GPointZero, .size = frame.size });
     layer_set_update_proc(layer, update_layer_callback);
     layer_add_child(window_root_layer, layer);
+
+
+    // Setup action bar
+    action_bar = action_bar_layer_create();
+    action_bar_layer_add_to_window(action_bar, window);
+    action_bar_layer_set_click_config_provider(action_bar, click_config_provider);
+    hide_actionbar(action_bar);
+    action_bar_visible = false;
 
 
     // Setup options window
@@ -335,13 +394,14 @@ void handle_init(void) {
 }
 
 void handle_deinit(void) {
-    /*gbitmap_destroy(button_up);
+    gbitmap_destroy(button_up);
     gbitmap_destroy(button_down);
-    gbitmap_destroy(button_cross);*/
+    gbitmap_destroy(button_cross);
 
-    layer_destroy(layer);
     menu_layer_destroy(options);
     window_destroy(options_window);
+    action_bar_layer_destroy(action_bar);
+    layer_destroy(layer);
     window_destroy(window);
 }
 

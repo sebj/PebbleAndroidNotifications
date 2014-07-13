@@ -31,6 +31,9 @@
 Window *window;
 Layer *layer;
 
+bool action_bar_visible;
+ActionBarLayer *action_bar;
+
 bool options_visible;
 Window *options_window;
 MenuLayer *options;
@@ -38,6 +41,7 @@ MenuLayer *options;
 GBitmap *button_up;
 GBitmap *button_down;
 GBitmap *button_cross;
+
 
 typedef struct Notification {
 	uint8_t icon[384];
@@ -49,5 +53,6 @@ Notification notifications[MAX_NOTIFICATIONS];
 
 int8_t loadingNotification;
 int8_t atNotification = LOADING_NOTIFICATIONS;
+
 
 int phone_battery = 50;
