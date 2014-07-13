@@ -143,10 +143,15 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > -1) {
-        DictionaryIterator *dict;
-        if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
-            dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
-            app_message_outbox_send();
+        if (action_bar_visible) {
+            DictionaryIterator *dict;
+            if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
+                dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
+                app_message_outbox_send();
+            }
+        } else {
+            show_actionbar(action_bar);
+            action_bar_visible = true;
         }
     } else {
         // Show options
@@ -157,15 +162,10 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > -1) {
-        if (action_bar_visible) {
-            DictionaryIterator *dict;
-            if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
-                dict_write_int8(dict, MSG_NOTIFICATION_ACTION, (int8_t)atNotification);
-                app_message_outbox_send();
-            }
-        } else {
-            show_actionbar(action_bar);
-            action_bar_visible = true;
+        DictionaryIterator *dict;
+        if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
+            dict_write_int8(dict, MSG_NOTIFICATION_ACTION, (int8_t)atNotification);
+            app_message_outbox_send();
         }
     }
 }
