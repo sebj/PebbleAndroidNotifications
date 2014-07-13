@@ -11,6 +11,7 @@ import java.util.UUID;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -19,6 +20,7 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.BatteryManager;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.service.notification.NotificationListenerService;
@@ -43,6 +45,7 @@ public class PNListenerService extends NotificationListenerService {
     private final int MSG_LOAD_NOTIFICATION_ID = 300;
     private final int MSG_NOTIFICATIONS_CHANGED = 500;
     private final int MSG_NO_NOTIFICATIONS = 700;
+    private final int MSG_PHONE_BATTERY = 800;
 
     private LinkedList<PebbleDictionary> outgoing = new LinkedList<PebbleDictionary>();
     private boolean flushing = false;
@@ -51,6 +54,19 @@ public class PNListenerService extends NotificationListenerService {
     private PebbleAckReceiver pAck;
     private PebbleNackReceiver pNack;
     private PebbleDataReceiver pData;
+
+    public int getBatteryLevel() {
+        Intent batteryIntent = getApplicationContext().registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+
+        int level = batteryIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = batteryIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+
+        if (level == -1 || scale == -1) {
+            return 50;
+        }
+
+        return (int)(((float)level / (float)scale) * 100.0f);
+    }
 
     private void flushOutgoing() {
         if (!PebbleKit.isWatchConnected(getApplicationContext())) {
@@ -170,7 +186,7 @@ public class PNListenerService extends NotificationListenerService {
                         dict.addString(MSG_NOTIFICATION_TITLE, title.substring(0, Math.min(title.length(), 19)));
                         dict.addString(MSG_NOTIFICATION_DETAILS, details.substring(0, Math.min(details.length(), 59)));
                         sentNotifications.put(notifId, sbn);
-                        dict.addInt8(MSG_LOAD_NOTIFICATION_ID, (byte) notifId++);
+                        dict.addInt8(MSG_LOAD_NOTIFICATION_ID, (byte)notifId++);
                         outgoing.add(dict);
 
                         // Get icon
@@ -242,6 +258,7 @@ public class PNListenerService extends NotificationListenerService {
 
                     if (notifId == 0) {
                         // No notifications
+                        Log.i(getClass().toString(), "Telling Pebble no notifications");
                         PebbleDictionary dict = new PebbleDictionary();
                         dict.addInt8(MSG_NO_NOTIFICATIONS, (byte)1);
                         outgoing.add(dict);
@@ -249,6 +266,7 @@ public class PNListenerService extends NotificationListenerService {
                         //PebbleKit.closeAppOnPebble(getApplicationContext(), appUUID);
                     }
                     flushOutgoing();
+
                 } else if (data.contains(1)) {
                     // Dismiss notification
                     int notifId = data.getInteger(1).intValue();
@@ -256,6 +274,7 @@ public class PNListenerService extends NotificationListenerService {
                     if (notif != null) {
                         cancelNotification(notif.getPackageName(), notif.getTag(), notif.getId());
                     }
+
                 } else if (data.contains(2)) {
                     // Try to open notification/perform notification action
                     int notifId = data.getInteger(2).intValue();
@@ -270,6 +289,13 @@ public class PNListenerService extends NotificationListenerService {
                             }
                         }
                     }
+                } else if (data.contains(4)) {
+                    //Battery status
+                    Log.i(getClass().toString(), "Sending battery ("+getBatteryLevel()+")");
+                    PebbleDictionary dict = new PebbleDictionary();
+                    dict.addInt8(MSG_PHONE_BATTERY, (byte)getBatteryLevel());
+                    outgoing.add(dict);
+                    flushOutgoing();
                 }
             }
         };
@@ -305,7 +331,7 @@ public class PNListenerService extends NotificationListenerService {
     public void onNotificationRemoved(StatusBarNotification sbn) {
         // If running notify that new notifications exist
         PebbleDictionary dict = new PebbleDictionary();
-        dict.addInt8(MSG_NOTIFICATIONS_CHANGED, (byte) 0);
+        dict.addInt8(MSG_NOTIFICATIONS_CHANGED, (byte)0);
         outgoing.add(dict);
         flushOutgoing();
     }
@@ -318,7 +344,7 @@ public class PNListenerService extends NotificationListenerService {
 
         PowerManager powerManager = (PowerManager)getSystemService(POWER_SERVICE);
 
-        // Only send to Pebble if (send ongoing is true (ie. doesn't mattter if notification is or not)
+        // Only send to Pebble if (send ongoing is true (ie. doesn't matter if notification is or not)
         // OR send ongoing is false but notification is not ongoing),
         // priority is default or higher, has master notifications switch enabled
         // AND [always send notifications is on, OR it's off but the screen is off]

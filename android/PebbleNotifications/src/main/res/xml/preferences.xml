@@ -9,7 +9,7 @@
         android:key="pref_master_switch"
         android:title="Notifications"
         android:summaryOff="No notifications will be sent to your Pebble"
-        android:summaryOn="Send notifications to your Pebble"
+        android:summaryOn="Notifications will appear on your Pebble"
         android:defaultValue="true"/>
 
     <CheckBoxPreference
