@@ -1,9 +1,6 @@
 package uk.co.connorhd.android.pebblenotifications;
 
 import android.app.AlertDialog;
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -12,7 +9,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.app.Fragment;
 import android.preference.PreferenceManager;
-import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,15 +22,15 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
     static final int INSTALL_PEBBLE_APP = 1;
     static final int NOTIFICATION_PERMISSION = 2;
 
-    static SharedPreferences sharedPrefs;
-    static Button permissionButton;
+    SharedPreferences sharedPrefs;
+    Button permissionButton;
 
-    static boolean installedApp = false;
-
+    boolean installedApp = false;
 
     public static SetupFragment newInstance() {
         return new SetupFragment();
     }
+
     public SetupFragment() {
         // Required empty public constructor
     }
@@ -53,7 +49,7 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
         mView.setBackgroundColor(Color.WHITE);
 
         permissionButton = (Button)mView.findViewById(R.id.btnAddPermission);
-        permissionButton.setEnabled(!notificationAccess());
+        permissionButton.setEnabled(!Global.notificationAccess(getActivity()));
 
         mView.findViewById(R.id.btnInstallApp).setOnClickListener(this);
         permissionButton.setOnClickListener(this);
@@ -64,6 +60,17 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
     }
 
     @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        //Perhaps not the best method
+
+        MainActivity activity = (MainActivity)getActivity();
+        if (activity != null) {
+            activity.showingSetup = false;
+        }
+    }
+
+    @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == INSTALL_PEBBLE_APP) {
             if (PebbleKit.isWatchConnected(getActivity().getApplicationContext()) && PebbleKit.getWatchFWVersion(getActivity().getApplicationContext()).getMajor() >= 2) {
@@ -71,80 +78,74 @@ public class SetupFragment extends Fragment implements View.OnClickListener {
                 installedApp = true;
             }
         } else if (requestCode == NOTIFICATION_PERMISSION) {
-            // Update button state to reflect user actions (or inactions)
-            permissionButton.setEnabled(!notificationAccess());
+            // Update button state to reflect user actions (or in-actions)
+            permissionButton.setEnabled(!Global.notificationAccess(getActivity()));
 
-            if (notificationAccess() && installedApp) {
+            if (Global.notificationAccess(getActivity()) && installedApp) {
                 SharedPreferences.Editor editor = sharedPrefs.edit();
                 editor.putBoolean("setup", true);
-                editor.commit();
+                editor.apply();
             }
         }
     }
 
     public void onClick(View v) {
-        if (v.getId() == R.id.btnInstallApp) {
-            // Install Pebble App..
-            if (PebbleKit.isWatchConnected(getActivity().getApplicationContext())) {
-                // ..if watch connected..
-                if (PebbleKit.getWatchFWVersion(getActivity().getApplicationContext()).getMajor() >= 2) {
-                    // ..and firmware 2.0+
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("http://connorhd.co.uk/pebble/notifications/watchapp.pbw"));
-                    startActivityForResult(intent, INSTALL_PEBBLE_APP);
+        switch(v.getId()) {
+            case R.id.btnInstallApp:
+                // Install Pebble App..
+                if (PebbleKit.isWatchConnected(getActivity().getApplicationContext())) {
+                    // ..if watch connected..
+                    if (PebbleKit.getWatchFWVersion(getActivity().getApplicationContext()).getMajor() >= 2) {
+                        // ..and firmware 2.0+
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("http://connorhd.co.uk/pebble/notifications/watchapp.pbw"));
+                        startActivityForResult(intent, INSTALL_PEBBLE_APP);
+                    } else {
+                        Toast.makeText(getActivity().getApplicationContext(), "Firmware 2.0+ required", Toast.LENGTH_LONG).show();
+                    }
                 } else {
-                    Toast.makeText(getActivity().getApplicationContext(), "Firmware 2.0+ required", Toast.LENGTH_LONG).show();
+                    Toast.makeText(getActivity().getApplicationContext(), "Please connect Pebble", Toast.LENGTH_LONG).show();
                 }
-            } else {
-                Toast.makeText(getActivity().getApplicationContext(), "Please connect Pebble", Toast.LENGTH_LONG).show();
-            }
+                break;
 
-        } else if (v.getId() == R.id.btnAddPermission) {
-            // Add security permission
-            if (!notificationAccess()) {
-                Intent intent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
-                startActivityForResult(intent, NOTIFICATION_PERMISSION);
-            }
+            case R.id.btnAddPermission:
+                // Add security permission
+                if (!Global.notificationAccess(getActivity())) {
+                    Intent intent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
+                    startActivityForResult(intent, NOTIFICATION_PERMISSION);
+                }
+                break;
 
-        } else if (v.getId() == R.id.btnCreateNotify) {
-            // Send test notification
-            ((MainActivity)getActivity()).sendTestNotification();
+            case R.id.btnCreateNotify:
+                // Send test notification
+                ((MainActivity)getActivity()).sendTestNotification();
+                break;
 
-        } else if (v.getId() == R.id.btnFinish) {
-            // Done!
-            if (sharedPrefs.getBoolean("setup", false)) {
-                ((MainActivity)getActivity()).finishedSetup();
-            } else {
-                new AlertDialog.Builder(getActivity())
-                        .setTitle("Pebble app not installed")
-                        .setMessage("Are you sure you want to continue anyway?")
-                        .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int which) {
+            case R.id.btnFinish:
+                // Done!
+                if (sharedPrefs.getBoolean("setup", false)) {
+                    ((MainActivity)getActivity()).finishedSetup();
+                } else {
+                    new AlertDialog.Builder(getActivity())
+                            .setTitle("Pebble app not installed")
+                            .setMessage("Are you sure you want to continue anyway?")
+                            .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
 
-                                SharedPreferences.Editor editor = sharedPrefs.edit();
-                                editor.putBoolean("setup", true);
-                                editor.commit();
+                                    SharedPreferences.Editor editor = sharedPrefs.edit();
+                                    editor.putBoolean("setup", true);
+                                    editor.apply();
 
-                                ((MainActivity)getActivity()).finishedSetup();
-                            }
-                        })
-                        .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int which) {
-                                // Do nothing
-                            }
-                        })
-                        .setIconAttribute(android.R.attr.alertDialogIcon)
-                        .show();
-            }
+                                    ((MainActivity)getActivity()).finishedSetup();
+                                }
+                            })
+                            .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int which) {
+                                    // Do nothing - stay on current page and allow user to install Pebble app
+                                }
+                            })
+                            .setIconAttribute(android.R.attr.alertDialogIcon)
+                            .show();
+                }
         }
-    }
-
-    // Based on http://stackoverflow.com/a/21392852
-    // Returns true or false based on whether app has access to notifications
-    public boolean notificationAccess() {
-        String enabledNotificationListeners = Settings.Secure.getString(getActivity().getContentResolver(), "enabled_notification_listeners");
-        String packageName = getActivity().getPackageName();
-
-        // Check to see if the enabledNotificationListeners String exists and contains our package name
-        return !(enabledNotificationListeners == null || !enabledNotificationListeners.contains(packageName));
     }
 }

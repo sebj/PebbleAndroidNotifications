@@ -12,12 +12,14 @@ void update_layer_callback(Layer *me, GContext *ctx) {
     
     if (atNotification < 0) {
         char *message;
+        bool android_service_possibly_not_started = false;
+
         switch (atNotification) {
             case LOADING_NOTIFICATIONS:
                 message = "Loading...";
                 break;
             case COMM_ERROR:
-                message = "Could not connect to Android";
+                android_service_possibly_not_started = true;
                 break;
             default:
                 message = "Error";
@@ -28,13 +30,18 @@ void update_layer_callback(Layer *me, GContext *ctx) {
         action_bar_layer_clear_icon(action_bar, BUTTON_ID_SELECT);
         action_bar_layer_clear_icon(action_bar, BUTTON_ID_DOWN);
 
-        if (atNotification == NO_NOTIFICATIONS) {
+        if (atNotification == NO_NOTIFICATIONS || android_service_possibly_not_started) {
             BatteryChargeState state = battery_state_service_peek();
             bool bluetooth_connected = bluetooth_connection_service_peek();
 
             char phone_status[16] = " disconnected";
-            if (bluetooth_connected) {
+            if (bluetooth_connected && !android_service_possibly_not_started) {
                 snprintf(phone_status, sizeof(phone_status), "at %d%%", phone_battery);
+
+            } else if (android_service_possibly_not_started) {
+            	strcpy(phone_status, " unavailable");
+
+            	//APP_LOG(APP_LOG_LEVEL_DEBUG, "strcpy result:%s",phone_status);
             }
 
             char info_msg[64];
@@ -143,15 +150,10 @@ static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > -1) {
-        if (action_bar_visible) {
-            DictionaryIterator *dict;
-            if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
-                dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
-                app_message_outbox_send();
-            }
-        } else {
-            show_actionbar(action_bar);
-            action_bar_visible = true;
+    	DictionaryIterator *dict;
+        if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
+            dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
+            app_message_outbox_send();
         }
     } else {
         // Show options
@@ -210,17 +212,19 @@ static void out_fail_handler(DictionaryIterator *failed, AppMessageResult reason
 }
 
 static void in_rcv_handler(DictionaryIterator *received, void *context) {
-    Tuple* cmd_tuple = dict_find(received, MSG_NOTIFICATIONS_CHANGED);
+	Tuple* cmd_tuple = dict_find(received, MSG_NOTIFICATIONS_CHANGED);
     if (cmd_tuple != NULL) {
-        ask_for_data();
+    	ask_for_data();
     }
 
     cmd_tuple = dict_find(received, MSG_NO_NOTIFICATIONS);
     if (cmd_tuple != NULL) {
         ask_for_phone_battery();
 
-        hide_actionbar(action_bar);
-        action_bar_visible = false;
+        if (action_bar_visible) {
+        	hide_actionbar(action_bar);
+        	action_bar_visible = false;
+        }
 
         atNotification = NO_NOTIFICATIONS;
     }
@@ -233,7 +237,7 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
     
     cmd_tuple = dict_find(received, MSG_LOAD_NOTIFICATION_ID);
     if (cmd_tuple != NULL) {
-        loadingNotification = cmd_tuple->value->int8;
+    	loadingNotification = cmd_tuple->value->int8;
         if (loadingNotification == 0) {
             atNotification = 0;
 
@@ -246,10 +250,10 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
                 vibes_short_pulse();
             }
 
-            // Only show action bar if multiple notifications
-            // if one, user can just press select button to dismiss/action
-            show_actionbar(action_bar);
-            action_bar_visible = true;
+            if (!action_bar_visible) {
+            	show_actionbar(action_bar);
+            	action_bar_visible = true;
+            }
         }
     }
     

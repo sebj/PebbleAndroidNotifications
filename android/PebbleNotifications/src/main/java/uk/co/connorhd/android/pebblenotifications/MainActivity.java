@@ -9,21 +9,22 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.Toast;
+
+import com.getpebble.android.kit.PebbleKit;
 
 public class MainActivity extends Activity {
-    static SharedPreferences sharedPrefs;
 
-    boolean showingSetup;
+    public boolean showingSetup;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+        SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
 
         if (savedInstanceState == null) {
             if (!sharedPrefs.getBoolean("setup", false)) {
@@ -33,17 +34,23 @@ public class MainActivity extends Activity {
             } else {
                 getFragmentManager().beginTransaction().add(R.id.container, new PrefsFragment()).commit();
                 showingSetup = false;
+
+                if (!Global.notificationAccess(this)) {
+                    Toast.makeText(this, "No notification access. Please setup.", Toast.LENGTH_LONG).show();
+                }
             }
         }
     }
 
     public void sendTestNotification() {
         NotificationManager nManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
-        Notification.Builder ncomp = new Notification.Builder(this);
-        ncomp.setContentTitle("Test notification");
-        ncomp.setContentText("Hello, world! :)");
-        ncomp.setSmallIcon(R.drawable.ic_launcher);
-        ncomp.setAutoCancel(true);
+        Notification.Builder ncomp =
+                new Notification.Builder(this)
+                .setSmallIcon(R.drawable.ic_launcher)
+                .setContentTitle("Test notification")
+                .setContentText("Hello, world! :)")
+                .setAutoCancel(true);
+
         nManager.notify((int)System.currentTimeMillis(), ncomp.build());
     }
 
@@ -51,12 +58,11 @@ public class MainActivity extends Activity {
         final FragmentTransaction ft = getFragmentManager().beginTransaction();
         ft.setCustomAnimations(0, R.animator.slide_down);
 
-        Fragment setupFragment = getFragmentManager().findFragmentByTag("setup");
+        Fragment setupFragment = getFragmentManager().findFragmentByTag("setup-menu");
 
         if (setupFragment != null) {
             // If setup added via menu button, remove it
             ft.remove(setupFragment);
-            ft.addToBackStack(null);
         } else {
             // If added normally at start, just replace it with a new preference fragment
             ft.replace(R.id.container, new PrefsFragment());
@@ -76,21 +82,26 @@ public class MainActivity extends Activity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch(item.getItemId()) {
+
+            case R.id.openApp:
+                PebbleKit.startAppOnPebble(getApplicationContext(), Global.appUUID);
+                break;
+
+            case R.id.sendTestNotification:
+                sendTestNotification();
+                break;
+
             case R.id.setup:
                 if (!showingSetup) {
                     final FragmentTransaction ft = getFragmentManager().beginTransaction();
                     ft.setCustomAnimations(R.animator.slide_up, 0);
-                    ft.add(R.id.container, new SetupFragment(), "setup");
+                    ft.add(R.id.container, new SetupFragment(), "setup-menu");
                     ft.addToBackStack(null);
                     ft.commit();
 
                     showingSetup = true;
                 }
 
-                break;
-
-            case R.id.sendTestNotification:
-                sendTestNotification();
                 break;
         }
 
