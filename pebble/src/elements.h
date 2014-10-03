@@ -56,4 +56,4 @@ int8_t atNotification = LOADING_NOTIFICATIONS;
 
 char pebble_status[16] = "%%";
 char phone_status[16] = "Unavailable";
-int phone_battery = 50;
+int phone_battery = 0;

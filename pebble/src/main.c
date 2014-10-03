@@ -102,10 +102,11 @@ static void refreshInformation() {
     BatteryChargeState charge_state = battery_state_service_peek();
     bool bluetooth_connected = bluetooth_connection_service_peek();
 
-    if (bluetooth_connected && atNotification != COMM_ERROR) {
-        snprintf(phone_status, sizeof(phone_status), "%d%% charged", phone_battery);
-    } else {
+    if (phone_battery == 0) {
         snprintf(phone_status, sizeof(phone_status), "Unavailable");
+        
+    } else if (bluetooth_connected && atNotification != COMM_ERROR) {
+        snprintf(phone_status, sizeof(phone_status), "%d%% charged", phone_battery);
     }
 
     if (charge_state.is_charging) {
