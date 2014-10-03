@@ -26,22 +26,22 @@
 #define MSG_PHONE_BATTERY 800
 
 #define PERSIST_VIBRATION 0
-
-// TODO: Use ScrollLayer (?)
-Window *window;
-Layer *layer;
-
-bool action_bar_visible;
-ActionBarLayer *action_bar;
-
-bool options_visible;
-Window *options_window;
-MenuLayer *options;
+#define PERSIST_INVERT_COLORS 1
 
 GBitmap *button_up;
 GBitmap *button_down;
 GBitmap *button_cross;
 
+bool action_bar_visible;
+ActionBarLayer *action_bar;
+
+bool notification_visible;
+Window *notifications_window;
+// TODO: Use ScrollLayer (?)
+Layer *notification_layer;
+
+Window *window;
+MenuLayer *menu;
 
 typedef struct Notification {
 	uint8_t icon[384];
@@ -54,5 +54,6 @@ Notification notifications[MAX_NOTIFICATIONS];
 int8_t loadingNotification;
 int8_t atNotification = LOADING_NOTIFICATIONS;
 
-
+char pebble_status[16] = "%%";
+char phone_status[16] = "Unavailable";
 int phone_battery = 50;

@@ -8,70 +8,29 @@
 // Drawing
 
 void update_layer_callback(Layer *me, GContext *ctx) {
-    graphics_context_set_text_color(ctx, GColorBlack);
-    
-    if (atNotification < 0) {
-        char *message;
-        bool android_service_possibly_not_started = false;
+    bool invert_colors = (persist_exists(PERSIST_INVERT_COLORS) == false || persist_read_bool(PERSIST_INVERT_COLORS) == true);
+    if (invert_colors) {
+        //Invert colors to white on black
+        graphics_context_set_text_color(ctx, GColorWhite);
+        window_set_background_color(notifications_window, GColorBlack);
 
-        switch (atNotification) {
-            case LOADING_NOTIFICATIONS:
-                message = "Loading...";
-                break;
-            case COMM_ERROR:
-                android_service_possibly_not_started = true;
-                break;
-            default:
-                message = "Error";
-                break;
-        }
+        action_bar_layer_set_background_color(action_bar, GColorWhite);
 
-        action_bar_layer_clear_icon(action_bar, BUTTON_ID_UP);
-        action_bar_layer_clear_icon(action_bar, BUTTON_ID_SELECT);
-        action_bar_layer_clear_icon(action_bar, BUTTON_ID_DOWN);
-
-        if (atNotification == NO_NOTIFICATIONS || android_service_possibly_not_started) {
-            BatteryChargeState state = battery_state_service_peek();
-            bool bluetooth_connected = bluetooth_connection_service_peek();
-
-            char phone_status[16] = " disconnected";
-            if (bluetooth_connected && !android_service_possibly_not_started) {
-                snprintf(phone_status, sizeof(phone_status), "at %d%%", phone_battery);
-
-            } else if (android_service_possibly_not_started) {
-            	strcpy(phone_status, " unavailable");
-
-            	//APP_LOG(APP_LOG_LEVEL_DEBUG, "strcpy result:%s",phone_status);
-            }
-
-            char info_msg[64];
-            snprintf(info_msg, sizeof(info_msg), "No notifications.\n\n\nBattery at %d%%\nAndroid %s", state.charge_percent, phone_status);
-
-            graphics_draw_text(ctx,
-                               info_msg,
-                               fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
-                               GRect(0, 8, 144, 100),
-                               GTextOverflowModeWordWrap,
-                               GTextAlignmentCenter,
-                               NULL);
-        
-        } else {
-            graphics_draw_text(ctx,
-                           message,
-                           fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
-                           GRect(5, (atNotification==COMM_ERROR)? 36 : 58, 144 - 10, 80),
-                           GTextOverflowModeWordWrap,
-                           GTextAlignmentCenter,
-                           NULL);
-        }
     } else {
+        graphics_context_set_text_color(ctx, GColorBlack);
+        window_set_background_color(notifications_window, GColorWhite);
+
+        action_bar_layer_set_background_color(action_bar, GColorBlack);
+    }
+    
+    if (atNotification >= 0) {
         GBitmap bitmap = {
             .addr = &notifications[atNotification].icon,
             .bounds = GRect(0, 0, 48, 48),
             .info_flags = 0x1000,
             .row_size_bytes = 8
         };
-        graphics_context_set_compositing_mode(ctx, GCompOpAssignInverted);
+        graphics_context_set_compositing_mode(ctx, invert_colors? GCompOpAssign : GCompOpAssignInverted);
         graphics_draw_bitmap_in_rect(ctx, &bitmap, GRect(95, 2, 48, 48));
 
 
@@ -139,31 +98,55 @@ void update_layer_callback(Layer *me, GContext *ctx) {
     }
 }
 
+static void refreshInformation() {
+    BatteryChargeState charge_state = battery_state_service_peek();
+    bool bluetooth_connected = bluetooth_connection_service_peek();
+
+    if (bluetooth_connected && atNotification != COMM_ERROR) {
+        snprintf(phone_status, sizeof(phone_status), "%d%% charged", phone_battery);
+    } else {
+        snprintf(phone_status, sizeof(phone_status), "Unavailable");
+    }
+
+    if (charge_state.is_charging) {
+        snprintf(pebble_status, sizeof(pebble_status), "Charging (%d%%)", charge_state.charge_percent);
+    } else {
+        snprintf(pebble_status, sizeof(pebble_status), "%d%% charged", charge_state.charge_percent);
+    }
+
+    menu_layer_reload_data(menu);
+}
+
 // Button presses
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > 0) {
         atNotification--;
     }
-    layer_mark_dirty((Layer*)layer);
+    layer_mark_dirty((Layer*)notification_layer);
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-    if (atNotification > -1) {
-    	DictionaryIterator *dict;
+    if (atNotification > LOADING_NOTIFICATIONS) {
+
+        DictionaryIterator *dict;
         if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
             dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
             app_message_outbox_send();
+
+            if (atNotification == 0 && atNotification == loadingNotification) {
+                //Remove notifications window and main menu window if only one notification
+                //and it was dismissed
+                window_stack_remove(window, false);
+                window_stack_pop(true);
+            }
         }
-    } else {
-        // Show options
-        window_stack_push(options_window, true);
-        options_visible = true;
     }
 }
 
 static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
     if (atNotification > -1) {
+
         DictionaryIterator *dict;
         if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
             dict_write_int8(dict, MSG_NOTIFICATION_ACTION, (int8_t)atNotification);
@@ -173,10 +156,10 @@ static void select_long_click_handler(ClickRecognizerRef recognizer, void *conte
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
-    if (atNotification > -1 && atNotification < loadingNotification) {
+    if (atNotification > LOADING_NOTIFICATIONS && atNotification < loadingNotification) {
         atNotification++;
     }
-    layer_mark_dirty((Layer*)layer);
+    layer_mark_dirty((Layer*)notification_layer);
 }
 
 static void click_config_provider(void *context) {
@@ -208,13 +191,13 @@ void ask_for_phone_battery() {
 
 static void out_fail_handler(DictionaryIterator *failed, AppMessageResult reason, void *context) {
     atNotification = COMM_ERROR;
-    layer_mark_dirty((Layer*)layer);
+    layer_mark_dirty((Layer*)notification_layer);
 }
 
 static void in_rcv_handler(DictionaryIterator *received, void *context) {
-	Tuple* cmd_tuple = dict_find(received, MSG_NOTIFICATIONS_CHANGED);
+    Tuple* cmd_tuple = dict_find(received, MSG_NOTIFICATIONS_CHANGED);
     if (cmd_tuple != NULL) {
-    	ask_for_data();
+        ask_for_data();
     }
 
     cmd_tuple = dict_find(received, MSG_NO_NOTIFICATIONS);
@@ -222,8 +205,8 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
         ask_for_phone_battery();
 
         if (action_bar_visible) {
-        	hide_actionbar(action_bar);
-        	action_bar_visible = false;
+            hide_actionbar(action_bar);
+            action_bar_visible = false;
         }
 
         atNotification = NO_NOTIFICATIONS;
@@ -232,18 +215,18 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
     cmd_tuple = dict_find(received, MSG_PHONE_BATTERY);
     if (cmd_tuple != NULL) {
         phone_battery = cmd_tuple->value->int8;
-        layer_mark_dirty((Layer*)layer);
+        refreshInformation();
     }
     
     cmd_tuple = dict_find(received, MSG_LOAD_NOTIFICATION_ID);
     if (cmd_tuple != NULL) {
-    	loadingNotification = cmd_tuple->value->int8;
+        loadingNotification = cmd_tuple->value->int8;
         if (loadingNotification == 0) {
             atNotification = 0;
 
-            if (options_visible) {
-                window_stack_pop(true);
-                options_visible = false;
+            if (!notification_visible) {
+                window_stack_push(notifications_window, false);
+                notification_visible = true;
             }
             
             if (persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true) {
@@ -251,8 +234,8 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
             }
 
             if (!action_bar_visible) {
-            	show_actionbar(action_bar);
-            	action_bar_visible = true;
+                show_actionbar(action_bar);
+                action_bar_visible = true;
             }
         }
     }
@@ -288,44 +271,96 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
         strcpy(&notifications[loadingNotification].details[0], cmd_tuple->value->cstring);
     }
     
-    layer_mark_dirty((Layer*)layer);
+    layer_mark_dirty((Layer*)notification_layer);
 }
 
-// Options menu
-void draw_row_callback(GContext *ctx, Layer *cell_layer, MenuIndex *cell_index, void *callback_context) {
-    switch(cell_index->row) {
+static void draw_row_callback(GContext *ctx, Layer *cell_layer, MenuIndex *cell_index, void *callback_context) {
+    switch(cell_index->section) {
+        //First section
         case 0:
-            menu_cell_basic_draw(ctx, cell_layer, "Vibration", (persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true)? "Enabled":"Disabled", NULL);
+            switch (cell_index->row) {
+                //Pebble battery
+                case 0:
+                    menu_cell_basic_draw(ctx, cell_layer, "Battery", pebble_status, NULL);
+                    break;
+
+                //Pebble battery
+                case 1:
+                    menu_cell_basic_draw(ctx, cell_layer, "Phone battery", phone_status, NULL);
+                    break;
+            }
+            break;
+
+        //Second section
+        case 1:
+            switch (cell_index->row) {
+                case 0:
+                    menu_cell_basic_draw(ctx, cell_layer, "Vibration", (persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true)? "Enabled":"Disabled", NULL);
+                    break;
+
+                case 1:
+                    menu_cell_basic_draw(ctx, cell_layer, "Colors", (persist_exists(PERSIST_INVERT_COLORS) == false || persist_read_bool(PERSIST_INVERT_COLORS) == true)? "Inverted (W on B)":"Regular (B on W)", NULL);
+                    break;
+            }
             break;
     }
 }
 
-uint16_t num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *callback_context) {
-    return 1;
+static void draw_header_callback(GContext *ctx, const Layer *cell_layer, uint16_t section_index, void *callback_context) {
+    switch (section_index) {
+        case 0:
+            menu_cell_basic_header_draw(ctx, cell_layer, "Information");
+            break;
+
+        case 1:
+            menu_cell_basic_header_draw(ctx, cell_layer, "Options");
+            break;
+    }
 }
 
-void select_click_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *callback_context) {
-    switch (cell_index->row) {
-        case 0:
+static int16_t header_height_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
+  return MENU_CELL_BASIC_HEADER_HEIGHT;
+}
+
+static uint16_t num_sections_callback(MenuLayer *menu_layer, void *data) {
+    return 2;
+}
+
+static uint16_t num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *callback_context) {
+    return 2;
+}
+
+static void select_click_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *callback_context) {
+    //Options section
+    bool need_to_redraw = false;
+    if (cell_index->section == 1) {
+
+        if (cell_index->row == 0) {
             persist_write_bool(PERSIST_VIBRATION, !(persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true));
+            need_to_redraw = true;
 
-            layer_mark_dirty(menu_layer_get_layer(options));
+        } else if (cell_index->row == 1) {
+            persist_write_bool(PERSIST_INVERT_COLORS, !(persist_exists(PERSIST_INVERT_COLORS) == false || persist_read_bool(PERSIST_INVERT_COLORS) == true));
+            need_to_redraw = true;
+        }
+    }
 
-            break;
+    if (need_to_redraw) {
+        layer_mark_dirty(menu_layer_get_layer(menu));
     }
 }
 
-void options_disappeared(Window *window) {
-    options_visible = false;
+void notifications_disappeared(Window *window) {
+    notification_visible = false;
 }
 
 // Pebble Bluetooth/battery status
 static void handle_bluetooth(bool connected) {
-    layer_mark_dirty((Layer*)layer);
+    layer_mark_dirty((Layer*)notification_layer);
 }
 
 static void handle_battery(BatteryChargeState charge_state) {
-    layer_mark_dirty((Layer*)layer);
+    layer_mark_dirty((Layer*)notification_layer);
 }
 
 // App lifecycle
@@ -338,56 +373,57 @@ void handle_init(void) {
 
     // Variables
     loadingNotification = 0;
-    options_visible = false;
+    notification_visible = false;
     
-    // Setup the window
-    window = window_create();
-    window_set_fullscreen(window, false);
+    // Setup the notifications window
+    notifications_window = window_create();
+    window_set_window_handlers(notifications_window, (WindowHandlers){
+        .disappear = notifications_disappeared
+    });
     //window_set_click_config_provider(window, click_config_provider);
 
-    Layer *window_root_layer = window_get_root_layer(window);
+    Layer *window_root_layer = window_get_root_layer(notifications_window);
     GRect frame = layer_get_bounds(window_root_layer);
     
     // Setup the layer that will display the notifications
-    layer = layer_create((GRect){ .origin = GPointZero, .size = frame.size });
-    layer_set_update_proc(layer, update_layer_callback);
-    layer_add_child(window_root_layer, layer);
+    notification_layer = layer_create((GRect){ .origin = GPointZero, .size = frame.size });
+    layer_set_update_proc(notification_layer, update_layer_callback);
+    layer_add_child(window_root_layer, notification_layer);
 
 
     // Setup action bar
     action_bar = action_bar_layer_create();
-    action_bar_layer_add_to_window(action_bar, window);
+    action_bar_layer_add_to_window(action_bar, notifications_window);
     action_bar_layer_set_click_config_provider(action_bar, click_config_provider);
     hide_actionbar(action_bar);
     action_bar_visible = false;
 
 
-    // Setup options window
-    options_window = window_create();
-    window_set_fullscreen(options_window, true);
-    window_set_window_handlers(options_window, (WindowHandlers){
-        .disappear = options_disappeared
-    });
+    // Setup main window
+    window = window_create();
 
-    // Setup options menu
-    options = menu_layer_create(frame);
-    menu_layer_set_callbacks(options, NULL, (MenuLayerCallbacks){
+    // Setup menu
+    menu = menu_layer_create(frame);
+    menu_layer_set_callbacks(menu, NULL, (MenuLayerCallbacks){
+        .get_num_sections = (MenuLayerGetNumberOfSectionsCallback) num_sections_callback,
+        .get_num_rows = (MenuLayerGetNumberOfRowsInSectionsCallback) num_rows_callback,
+        .get_header_height = (MenuLayerGetHeaderHeightCallback) header_height_callback,
+        .draw_header = (MenuLayerDrawHeaderCallback) draw_header_callback,
         .draw_row = (MenuLayerDrawRowCallback)draw_row_callback,
-        .get_num_rows = (MenuLayerGetNumberOfRowsInSectionsCallback)num_rows_callback,
         .select_click = (MenuLayerSelectCallback)select_click_callback
     });
-    menu_layer_set_click_config_onto_window(options, options_window);
+    menu_layer_set_click_config_onto_window(menu, window);
 
-    layer_add_child(window_get_root_layer(options_window), menu_layer_get_layer(options));
+    layer_add_child(window_get_root_layer(window), menu_layer_get_layer(menu));
 
     // Battery/Bluetooth status
     battery_state_service_subscribe(handle_battery);
     bluetooth_connection_service_subscribe(handle_bluetooth);
 
-    // Trigger a layer update
-    layer_mark_dirty((Layer*)layer);
 
-    window_stack_push(window, true /* Animated */);
+    window_stack_push(window, true);
+
+    refreshInformation();
 
     // Setup AppMessage
     app_message_register_inbox_received(in_rcv_handler);
@@ -402,10 +438,10 @@ void handle_deinit(void) {
     gbitmap_destroy(button_down);
     gbitmap_destroy(button_cross);
 
-    menu_layer_destroy(options);
-    window_destroy(options_window);
+    layer_destroy(notification_layer);
+    window_destroy(notifications_window);
     action_bar_layer_destroy(action_bar);
-    layer_destroy(layer);
+    menu_layer_destroy(menu);
     window_destroy(window);
 }
 
