@@ -25,6 +25,7 @@
 
 #define MSG_PHONE_BATTERY 800
 
+#define PERSIST_PHONE_BATTERY -1
 #define PERSIST_VIBRATION 0
 #define PERSIST_INVERT_COLORS 1
 
@@ -56,4 +57,3 @@ int8_t atNotification = LOADING_NOTIFICATIONS;
 
 char pebble_status[16] = "%%";
 char phone_status[16] = "Unavailable";
-int phone_battery = 0;

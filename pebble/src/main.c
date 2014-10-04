@@ -103,6 +103,8 @@ static void refreshInformation() {
     BatteryChargeState charge_state = battery_state_service_peek();
     bool bluetooth_connected = bluetooth_connection_service_peek();
 
+    int phone_battery = persist_read_int(PERSIST_PHONE_BATTERY);
+
     if (phone_battery == 0) {
         snprintf(phone_status, sizeof(phone_status), "Unavailable");
         
@@ -137,12 +139,11 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
             dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
             app_message_outbox_send();
 
-            if (atNotification == 0 && atNotification == loadingNotification) {
-                //Remove notifications window and main menu window if only one notification
-                //and it was dismissed
-                window_stack_remove(window, false);
+            if (atNotification == 0 && atNotification == loadingNotification && notification_visible) {
+                //If only one notification and it was dismissed on Pebble
+                //Pop notification window (slide out)
+                window_stack_remove(notifications_window, true);
                 notification_visible = false;
-                window_stack_pop(true);
             }
         }
     }
@@ -214,11 +215,19 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
         }
 
         atNotification = NO_NOTIFICATIONS;
+
+        if (notification_visible) {
+            window_stack_remove(notifications_window, false);
+            notification_visible = false;
+        }
     }
 
     cmd_tuple = dict_find(received, MSG_PHONE_BATTERY);
     if (cmd_tuple != NULL) {
-        phone_battery = cmd_tuple->value->int8;
+        
+        int phone_battery = cmd_tuple->value->int8;
+        persist_write_int(PERSIST_PHONE_BATTERY, phone_battery);
+        
         refreshInformation();
     }
     
@@ -226,9 +235,12 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
     if (cmd_tuple != NULL) {
         loadingNotification = cmd_tuple->value->int8;
         if (loadingNotification == 0) {
+
             atNotification = 0;
 
             if (!notification_visible) {
+                light_enable_interaction();
+
                 window_stack_push(notifications_window, false);
                 notification_visible = true;
             }
@@ -424,10 +436,9 @@ void handle_init(void) {
     battery_state_service_subscribe(handle_battery);
     bluetooth_connection_service_subscribe(handle_bluetooth);
 
-
-    window_stack_push(window, true);
-
     refreshInformation();
+
+    window_stack_push(window, false);
 
     // Setup AppMessage
     app_message_register_inbox_received(in_rcv_handler);
