@@ -128,12 +128,8 @@ public class PNListenerService extends NotificationListenerService {
                         PendingIntent intent = notif.getNotification().contentIntent;
                         if (intent != null) {
                             try {
-                                PowerManager.WakeLock screenLock = ((PowerManager)getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP, getClass().toString());
-                                screenLock.acquire();
-
                                 notif.getNotification().contentIntent.send();
 
-                                screenLock.release();
                             } catch (PendingIntent.CanceledException e) {
                                 //
                             }

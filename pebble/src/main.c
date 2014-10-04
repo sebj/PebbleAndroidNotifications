@@ -87,6 +87,7 @@ void update_layer_callback(Layer *me, GContext *ctx) {
             action_bar_layer_set_icon(action_bar, BUTTON_ID_DOWN, button_down);
         }
 
+        //Hide action bar if need to and shown; show action bar if need to and hidden
         if (should_hide_action_bar && action_bar_visible) {
             hide_actionbar(action_bar);
             action_bar_visible = false;
@@ -111,6 +112,7 @@ static void refreshInformation() {
 
     if (charge_state.is_charging) {
         snprintf(pebble_status, sizeof(pebble_status), "Charging (%d%%)", charge_state.charge_percent);
+        
     } else {
         snprintf(pebble_status, sizeof(pebble_status), "%d%% charged", charge_state.charge_percent);
     }
@@ -139,6 +141,7 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
                 //Remove notifications window and main menu window if only one notification
                 //and it was dismissed
                 window_stack_remove(window, false);
+                notification_visible = false;
                 window_stack_pop(true);
             }
         }
@@ -277,22 +280,22 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
 
 static void draw_row_callback(GContext *ctx, Layer *cell_layer, MenuIndex *cell_index, void *callback_context) {
     switch(cell_index->section) {
-        //First section
+        //Battery
         case 0:
             switch (cell_index->row) {
                 //Pebble battery
                 case 0:
-                    menu_cell_basic_draw(ctx, cell_layer, "Battery", pebble_status, NULL);
+                    menu_cell_basic_draw(ctx, cell_layer, "Pebble", pebble_status, NULL);
                     break;
 
                 //Pebble battery
                 case 1:
-                    menu_cell_basic_draw(ctx, cell_layer, "Phone battery", phone_status, NULL);
+                    menu_cell_basic_draw(ctx, cell_layer, "Phone", phone_status, NULL);
                     break;
             }
             break;
 
-        //Second section
+        //Options
         case 1:
             switch (cell_index->row) {
                 case 0:
@@ -310,7 +313,7 @@ static void draw_row_callback(GContext *ctx, Layer *cell_layer, MenuIndex *cell_
 static void draw_header_callback(GContext *ctx, const Layer *cell_layer, uint16_t section_index, void *callback_context) {
     switch (section_index) {
         case 0:
-            menu_cell_basic_header_draw(ctx, cell_layer, "Information");
+            menu_cell_basic_header_draw(ctx, cell_layer, "Battery");
             break;
 
         case 1:
@@ -338,12 +341,12 @@ static void select_click_callback(MenuLayer *menu_layer, MenuIndex *cell_index, 
 
         if (cell_index->row == 0) {
             persist_write_bool(PERSIST_VIBRATION, !(persist_exists(PERSIST_VIBRATION) == false || persist_read_bool(PERSIST_VIBRATION) == true));
-            need_to_redraw = true;
-
+            
         } else if (cell_index->row == 1) {
             persist_write_bool(PERSIST_INVERT_COLORS, !(persist_exists(PERSIST_INVERT_COLORS) == false || persist_read_bool(PERSIST_INVERT_COLORS) == true));
-            need_to_redraw = true;
         }
+
+        need_to_redraw = true;
     }
 
     if (need_to_redraw) {
