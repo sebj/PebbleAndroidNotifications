@@ -138,13 +138,6 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
         if (app_message_outbox_begin(&dict) == APP_MSG_OK) {
             dict_write_int8(dict, MSG_DISMISS_NOTIFICATION, (int8_t)atNotification);
             app_message_outbox_send();
-
-            if (atNotification == 0 && atNotification == loadingNotification && notification_visible) {
-                //If only one notification and it was dismissed on Pebble
-                //Pop notification window (slide out)
-                window_stack_remove(notifications_window, true);
-                notification_visible = false;
-            }
         }
     }
 }
@@ -216,8 +209,14 @@ static void in_rcv_handler(DictionaryIterator *received, void *context) {
 
         atNotification = NO_NOTIFICATIONS;
 
-        if (notification_visible) {
-            window_stack_remove(notifications_window, false);
+        if (launch_reason() == APP_LAUNCH_PHONE) {
+            notification_visible = false;
+            window_stack_pop_all(true);
+
+        } else if (notification_visible) {
+            //If user launched app and notification visible,
+            //remove notification window
+            window_stack_remove(notifications_window, true);
             notification_visible = false;
         }
     }
