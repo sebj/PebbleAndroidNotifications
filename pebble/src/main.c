@@ -454,10 +454,11 @@ void handle_deinit(void) {
     gbitmap_destroy(button_up);
     gbitmap_destroy(button_down);
     gbitmap_destroy(button_cross);
+    action_bar_layer_destroy(action_bar);
 
     layer_destroy(notification_layer);
     window_destroy(notifications_window);
-    action_bar_layer_destroy(action_bar);
+    
     menu_layer_destroy(menu);
     window_destroy(window);
 }

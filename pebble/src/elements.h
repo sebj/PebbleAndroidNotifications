@@ -25,6 +25,7 @@
 
 #define MSG_PHONE_BATTERY 800
 
+//Persistent keys
 #define PERSIST_PHONE_BATTERY -1
 #define PERSIST_VIBRATION 0
 #define PERSIST_INVERT_COLORS 1
