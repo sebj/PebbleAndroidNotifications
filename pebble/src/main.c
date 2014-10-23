@@ -165,8 +165,9 @@ static void click_config_provider(void *context) {
     window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
     window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
 
-    // Specify down handler but no up, with the default delay (0 meaning 500ms)
-    window_long_click_subscribe(BUTTON_ID_SELECT, 0, select_long_click_handler, NULL);
+    // Specified down handler but no up - don't have to release for action to trigger
+    // System default delay is 500ms, for reference
+    window_long_click_subscribe(BUTTON_ID_SELECT, 400, select_long_click_handler, NULL);
 }
 
 // Phone communication
@@ -437,7 +438,9 @@ void handle_init(void) {
 
     refreshInformation();
 
-    window_stack_push(window, false);
+    if (launch_reason() != APP_LAUNCH_PHONE) {
+    	window_stack_push(window, false);
+    }
 
     // Setup AppMessage
     app_message_register_inbox_received(in_rcv_handler);
